@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Bubble Bases",
+    "slug": "bubble-bases",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.churilov.bubblebases",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
+      }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#dcf2ea"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "65bfa970-408e-4829-bee6-6572f1ec8d99"
+      }
+    },
+    "owner": "il_passion"
+  }
+}

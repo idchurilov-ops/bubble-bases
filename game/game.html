@@ -1,0 +1,1096 @@
+<title>Bubble Bases</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Layout: one-screen game. Slim top bar with score tug-of-war, world canvas below, overlay cards for setup, results, scores and Full Pack. Single bright theme by choice. */
+:root {
+  --sea: #dcf2ea;
+  --sea-deep: #a5d9c6;
+  --ink: #17324a;
+  --muted: #5b7186;
+  --line: #dbe6ee;
+  --you: #2f6fe4;
+  --you-dark: #1a3f94;
+  --phone: #e8402c;
+  --phone-dark: #9e2414;
+  --neutral: #c3ced8;
+  --card: #ffffff;
+  --soft: #eef4f8;
+  --sun: #ffb300;
+  --display: "Baloo 2", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Nunito", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  background: var(--sea); color: var(--ink); font-family: var(--body);
+  overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.app { height: 100%; display: flex; flex-direction: column; }
+.bar {
+  display: flex; align-items: center; gap: 12px;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--card); border-bottom: 3px solid var(--sea-deep);
+}
+.logo { font-family: var(--display); font-weight: 800; font-size: 20px; line-height: 1; white-space: nowrap; }
+.logo b { color: var(--you); } .logo i { color: var(--phone); font-style: normal; }
+.tug { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tug-track { height: 12px; border-radius: 999px; background: var(--neutral); overflow: hidden; display: flex; }
+.tug-you { background: var(--you); transition: width .3s; }
+.tug-gap { flex: 1; }
+.tug-phone { background: var(--phone); transition: width .3s; }
+.tug-labels { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tug-labels span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tug-labels .y { color: var(--you-dark); } .tug-labels .p { color: var(--phone-dark); }
+.btn-small {
+  font: 800 14px var(--body); color: var(--ink); background: var(--soft);
+  border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer;
+}
+.stage { flex: 1; position: relative; min-height: 0; }
+canvas#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.overlay {
+  position: absolute; inset: 0; display: flex; overflow-y: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px;
+  background: rgba(23, 50, 74, .4);
+}
+.overlay[hidden], .hint[hidden] { display: none; }
+.card {
+  margin: auto; background: var(--card); border-radius: 22px; padding: 20px 18px; width: 100%; max-width: 390px;
+  box-shadow: 0 8px 0 rgba(23,50,74,.25); display: flex; flex-direction: column; gap: 14px;
+}
+.card h1, .card h2 { font-family: var(--display); font-weight: 800; margin: 0; line-height: 1.05; text-wrap: balance; text-align: center; }
+.card h1 { font-size: 34px; } .card h2 { font-size: 30px; }
+.card p { margin: 0; font-size: 15px; line-height: 1.45; }
+.lead { text-align: center; color: var(--muted); }
+.section { display: flex; flex-direction: column; gap: 7px; }
+.label { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 700; }
+input#playerName {
+  font: 700 16px var(--body); color: var(--ink); border: 2px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; width: 100%; box-sizing: border-box; background: var(--card); user-select: text; -webkit-user-select: text;
+}
+input#playerName:focus { outline: none; border-color: var(--you); }
+
+.worlds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 4px 7px; border-radius: 14px; border: 3px solid transparent; cursor: pointer;
+  font: 800 12px var(--body); color: var(--ink); background: var(--soft);
+}
+.tile canvas { width: 52px; height: 52px; border-radius: 10px; }
+.tile[aria-pressed="true"] { border-color: var(--you); }
+.tile .tag {
+  position: absolute; top: 4px; right: 4px; display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: #fff;
+}
+.tile .free {
+  position: absolute; top: 4px; left: 4px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  background: #fff; border-radius: 6px; padding: 1px 5px; color: var(--muted);
+}
+.tile.locked canvas { opacity: .55; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch {
+  position: relative; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; padding: 0;
+  border: 3px solid #fff; box-shadow: 0 0 0 2px var(--line);
+  display: grid; place-items: center; color: #fff;
+}
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--ink); }
+.swatch.locked { opacity: .4; }
+.swatch:disabled { opacity: .15; cursor: not-allowed; }
+
+.levels { display: flex; gap: 8px; }
+.levels button {
+  flex: 1; font: 800 15px var(--body); padding: 10px 6px; border-radius: 12px; cursor: pointer;
+  border: 3px solid var(--soft); background: var(--card); color: var(--ink);
+}
+.levels button[aria-pressed="true"] { border-color: var(--you); background: var(--soft); }
+.levels small { display: block; font-size: 11px; color: var(--muted); font-weight: 700; }
+.play {
+  font: 800 22px var(--display); color: #fff; background: var(--you); border: 0; border-radius: 16px;
+  padding: 12px; cursor: pointer; box-shadow: 0 5px 0 var(--you-dark);
+}
+.play:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--you-dark); }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+.pack-btn { background: #fff4d1; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+
+.score-big { font: 800 56px/1 var(--display); text-align: center; color: var(--you); font-variant-numeric: tabular-nums; }
+.score-unit { text-align: center; font-weight: 800; color: var(--muted); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin-top: -8px; }
+.breakdown { display: flex; flex-direction: column; gap: 4px; background: var(--soft); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.breakdown div { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.breakdown b { font-weight: 800; }
+.chip { align-self: center; background: #fff4d1; color: #7a5600; font-weight: 800; font-size: 13px; padding: 4px 12px; border-radius: 999px; }
+
+.tabs { display: flex; gap: 6px; background: var(--soft); padding: 4px; border-radius: 12px; }
+.tabs button { flex: 1; border: 0; background: transparent; font: 800 14px var(--body); color: var(--muted); padding: 8px; border-radius: 9px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(23,50,74,.15); }
+.board { display: flex; flex-direction: column; }
+.board-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+.board-row:last-child { border-bottom: 0; }
+.board-row.me { background: #fff4d1; border-radius: 10px; }
+.rank { font: 800 18px var(--display); text-align: center; color: var(--muted); }
+.who { min-width: 0; }
+.who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who span { font-size: 12px; color: var(--muted); }
+.pts { font: 800 20px var(--display); font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--muted); padding: 18px 0; font-size: 14px; }
+.note { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.4; }
+
+.pack-price { text-align: center; font: 800 18px var(--display); color: var(--muted); margin-top: -8px; }
+.pack-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
+.pack-list li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.35; }
+.pack-list .tick { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--you); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
+.pack-list .soon { background: var(--neutral); }
+.pack-worlds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.pack-worlds canvas { width: 100%; height: auto; aspect-ratio: 1; max-width: 100%; border-radius: 10px; }
+.proto { font-size: 12px; color: var(--muted); text-align: center; background: var(--soft); border-radius: 10px; padding: 8px 10px; line-height: 1.4; }
+
+.hint {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100% - 32px);
+  background: var(--card); padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: 14px;
+  box-shadow: 0 3px 0 rgba(23,50,74,.2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+</style>
+
+<div class="app">
+  <div class="bar">
+    <div class="logo"><b>Bubble</b> <i>Bases</i></div>
+    <div class="tug" aria-label="Army totals">
+      <div class="tug-track"><div class="tug-you" id="tugYou" style="width:50%"></div><div class="tug-gap"></div><div class="tug-phone" id="tugPhone" style="width:50%"></div></div>
+      <div class="tug-labels"><span class="y" id="youCount">You 0</span><span class="p" id="phoneCount">Phone 0</span></div>
+    </div>
+    <button class="btn-small" id="menuBtn" type="button">Menu</button>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hint" id="hint" hidden></div>
+
+    <!-- Setup -->
+    <div class="overlay" id="startOverlay">
+      <div class="card">
+        <h1>Bubble Bases</h1>
+        <p class="lead" id="howTo"></p>
+        <div class="section">
+          <label class="label" for="playerName">Your name</label>
+          <input id="playerName" type="text" maxlength="14" placeholder="e.g. Lev" autocomplete="off">
+        </div>
+        <div class="section" id="worldsSection">
+          <div class="label">World <em id="worldName"></em></div>
+          <div class="worlds" id="worlds"></div>
+        </div>
+        <div class="section">
+          <div class="label">Your colour</div>
+          <div class="swatches" id="youSwatches"></div>
+        </div>
+        <div class="section" id="phoneSection">
+          <div class="label">Phone colour</div>
+          <div class="swatches" id="phoneSwatches"></div>
+        </div>
+        <div class="section">
+          <div class="label">How smart is the phone</div>
+          <div class="levels" role="group" aria-label="Difficulty">
+            <button type="button" data-level="easy">Easy<small>points ×1</small></button>
+            <button type="button" data-level="normal">Normal<small>points ×2</small></button>
+            <button type="button" data-level="hard">Hard<small>points ×3</small></button>
+          </div>
+        </div>
+        <button class="play" id="playBtn" type="button">Play!</button>
+        <div class="row">
+          <button class="btn-small" id="scoresBtn" type="button">My scores</button>
+          <button class="btn-small pack-btn" id="packBtn" type="button">Full Pack</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="overlay" id="endOverlay" hidden>
+      <div class="card">
+        <h2 id="endTitle">You win!</h2>
+        <p class="lead" id="endText"></p>
+        <div class="score-big" id="endScore">0</div>
+        <div class="score-unit">points</div>
+        <div class="chip" id="endChip" hidden>New best this week!</div>
+        <div class="breakdown" id="endBreakdown"></div>
+        <button class="play" id="againBtn" type="button">Play again</button>
+        <div class="row">
+          <button class="btn-small" id="endMenuBtn" type="button">Change setup</button>
+          <button class="btn-small" id="endScoresBtn" type="button">See scores</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scores -->
+    <div class="overlay" id="scoresOverlay" hidden>
+      <div class="card">
+        <h2>Scoreboard</h2>
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" id="tabWeek" aria-selected="true">This week</button>
+          <button type="button" role="tab" id="tabAll" aria-selected="false">All time</button>
+        </div>
+        <div class="board" id="board"></div>
+        <p class="note" id="scoresNote">Scores are saved on this phone, so the whole family can compete. A global ranking comes with the iPhone app through Game Center.</p>
+        <button class="btn-small" id="scoresClose" type="button">Back</button>
+      </div>
+    </div>
+
+    <!-- Full Pack -->
+    <div class="overlay" id="packOverlay" hidden>
+      <div class="card">
+        <h2>Full Pack</h2>
+        <div class="pack-price">€2.99 once, no ads</div>
+        <div class="pack-worlds" id="packWorlds"></div>
+        <ul class="pack-list">
+          <li><span class="tick">✓</span><span><b>5 new worlds:</b> Jellyfish, Planets, Dinosaurs, Jelly Worms and Lollipops</span></li>
+          <li><span class="tick">✓</span><span><b>Any colours</b> for your team and for the phone</span></li>
+          <li><span class="tick soon">+</span><span><b>Coming next:</b> special bases and two players on one phone</span></li>
+        </ul>
+        <button class="play" id="unlockBtn" type="button">Unlock Full Pack</button>
+        <p class="proto" id="protoNote">Prototype: this button unlocks everything for free so you can test it. In the iPhone app it becomes an Apple in-app purchase behind a parent check.</p>
+        <button class="btn-small" id="packClose" type="button">Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d'), stage = $('stage');
+  const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const TAU = Math.PI * 2;
+
+  /* ---------- Colours ---------- */
+  const PALETTE = {
+    blue:   { name: 'blue',   c: ['#2f6fe4', '#1a3f94', '#6f9bff'] },
+    red:    { name: 'red',    c: ['#e8402c', '#9e2414', '#ff7a63'] },
+    green:  { name: 'green',  c: ['#3fb93a', '#1f7a26', '#7ee07a'] },
+    yellow: { name: 'yellow', c: ['#ffc61a', '#b38600', '#ffe36b'] },
+    orange: { name: 'orange', c: ['#ff8a1f', '#b8560a', '#ffad5c'] },
+    pink:   { name: 'pink',   c: ['#ff5fae', '#b02a72', '#ff94c8'] },
+    purple: { name: 'purple', c: ['#9b5de5', '#5f2fa3', '#b98af0'] },
+  };
+  const TEAM_IDS = Object.keys(PALETTE);
+  const CLEAR = ['#f2e6c4', '#b09a62', '#ffffff'];
+  const FREE_YOU = ['blue', 'green', 'purple'];
+  const FREE_PHONE = ['red'];
+
+  /* ---------- Paint helpers ---------- */
+  function hexA(hex, a) {
+    const v = parseInt(hex.slice(1), 16);
+    return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+  }
+  function glint(g, cx, cy, rx, ry, rot, a) {
+    g.save(); g.translate(cx, cy); g.rotate(rot); g.scale(rx, ry);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 1, 0, TAU); g.fill(); g.restore();
+  }
+  function bump(g, cx, cy, r, c) {
+    g.fillStyle = hexA(c[1], 0.4);
+    g.beginPath(); g.arc(cx + r * 0.2, cy + r * 0.25, r, 0, TAU); g.fill();
+    const gr = g.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.05, cx, cy, r);
+    gr.addColorStop(0, hexA(c[2], 0.95)); gr.addColorStop(0.6, hexA(c[0], 0.7)); gr.addColorStop(1, hexA(c[0], 0));
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+    glint(g, cx - r * 0.35, cy - r * 0.42, r * 0.4, r * 0.28, -0.6, 0.9);
+  }
+  function ellipsePath(x, y, s, parts) {
+    const p = new Path2D();
+    for (const [cx, cy, rx, ry, rot] of parts) {
+      const q = new Path2D(); q.ellipse(x + cx * s, y + cy * s, rx * s, ry * s, rot || 0, 0, TAU); p.addPath(q);
+    }
+    return p;
+  }
+
+  /* ---------- World 1: Gummy Bears (free) ---------- */
+  const BEAR_PARTS = [
+    [-0.32, -0.78, 0.17, 0.17, 0], [0.32, -0.78, 0.17, 0.17, 0],
+    [-0.5, 0.02, 0.2, 0.25, 0.7], [0.5, 0.02, 0.2, 0.25, -0.7],
+    [-0.29, 0.72, 0.25, 0.22, 0], [0.29, 0.72, 0.25, 0.22, 0],
+    [0, 0.28, 0.52, 0.5, 0],
+    [0, -0.42, 0.46, 0.4, 0],
+  ];
+  function paintGummy(g, x, y, s, c) {
+    const path = ellipsePath(x, y, s, BEAR_PARTS);
+    const body = g.createRadialGradient(x, y + s * 0.1, s * 0.1, x, y + s * 0.05, s * 1.05);
+    body.addColorStop(0, c[1]); body.addColorStop(0.55, c[0]); body.addColorStop(1, c[2]);
+    g.globalAlpha = 0.9; g.fillStyle = body; g.fill(path); g.globalAlpha = 1;
+    g.save(); g.clip(path);
+    g.strokeStyle = hexA(c[1], 0.28); g.lineWidth = s * 0.05;
+    for (const [cx, cy, rx, ry, rot] of BEAR_PARTS.slice(0, 7)) {
+      g.beginPath(); g.ellipse(x + cx * s, y + cy * s, rx * s, ry * s, rot, 0, TAU); g.stroke();
+    }
+    g.lineJoin = 'round';
+    g.strokeStyle = hexA(c[2], 0.15); g.lineWidth = s * 0.3; g.stroke(path);
+    g.strokeStyle = hexA(c[2], 0.25); g.lineWidth = s * 0.14; g.stroke(path);
+    const sh = g.createLinearGradient(x - s * 0.6, y - s * 0.8, x + s * 0.7, y + s);
+    sh.addColorStop(0.5, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.22)');
+    g.fillStyle = sh; g.fillRect(x - 2 * s, y - 2 * s, 4 * s, 4 * s);
+    glint(g, x + s * 0.18, y + s * 0.58, s * 0.3, s * 0.16, 0, 0.35);
+    g.restore();
+    g.strokeStyle = hexA(c[1], 0.55); g.lineWidth = Math.max(1, s * 0.035); g.stroke(path);
+    const b = s * 0.075;
+    bump(g, x - s * 0.17, y - s * 0.5, b, c); bump(g, x + s * 0.17, y - s * 0.5, b, c);
+    bump(g, x, y - s * 0.3, b * 1.45, c);
+    bump(g, x - s * 0.53, y + s * 0.06, b, c); bump(g, x + s * 0.53, y + s * 0.06, b, c);
+    bump(g, x - s * 0.29, y + s * 0.76, b * 1.25, c); bump(g, x + s * 0.29, y + s * 0.76, b * 1.25, c);
+    glint(g, x - s * 0.2, y - s * 0.64, s * 0.2, s * 0.08, -0.4, 0.8);
+    glint(g, x - s * 0.34, y + s * 0.14, s * 0.07, s * 0.24, 0.25, 0.65);
+    glint(g, x - s * 0.36, y - s * 0.84, s * 0.06, s * 0.04, -0.6, 0.85);
+  }
+
+  /* ---------- World 2: Jellyfish ---------- */
+  function paintJelly(g, x, y, s, c) {
+    g.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const tx = x + (i - 2) * s * 0.24;
+      const amp = s * 0.11 * (i % 2 ? -1 : 1);
+      g.strokeStyle = hexA(i % 2 ? c[2] : c[0], 0.8);
+      g.lineWidth = s * (i % 2 ? 0.07 : 0.1);
+      g.beginPath(); g.moveTo(tx, y - s * 0.05);
+      g.bezierCurveTo(tx + amp, y + s * 0.3, tx - amp, y + s * 0.55, tx + amp * 0.6, y + s * (i === 2 ? 0.95 : 0.82));
+      g.stroke();
+    }
+    const bell = new Path2D();
+    bell.moveTo(x - s * 0.74, y - s * 0.02);
+    bell.bezierCurveTo(x - s * 0.78, y - s * 1.0, x + s * 0.78, y - s * 1.0, x + s * 0.74, y - s * 0.02);
+    const n = 6, w = 1.48 * s / n;
+    for (let i = 0; i < n; i++) {
+      const x0 = x + s * 0.74 - i * w, x1 = x0 - w;
+      bell.quadraticCurveTo((x0 + x1) / 2, y + s * 0.16, x1, y - s * 0.02);
+    }
+    bell.closePath();
+    const gr = g.createRadialGradient(x, y - s * 0.2, s * 0.05, x, y - s * 0.3, s * 0.85);
+    gr.addColorStop(0, c[1]); gr.addColorStop(0.5, c[0]); gr.addColorStop(1, c[2]);
+    g.globalAlpha = 0.86; g.fillStyle = gr; g.fill(bell); g.globalAlpha = 1;
+    g.save(); g.clip(bell);
+    g.strokeStyle = hexA(c[2], 0.35); g.lineWidth = s * 0.2; g.stroke(bell);
+    const sh = g.createLinearGradient(x - s * 0.5, y - s * 0.7, x + s * 0.7, y + s * 0.1);
+    sh.addColorStop(0.5, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,30,.2)');
+    g.fillStyle = sh; g.fillRect(x - s, y - s, 2 * s, 1.3 * s);
+    g.restore();
+    g.strokeStyle = hexA(c[1], 0.6); g.lineWidth = Math.max(1, s * 0.035); g.stroke(bell);
+    bump(g, x - s * 0.42, y - s * 0.52, s * 0.06, c);
+    bump(g, x + s * 0.44, y - s * 0.46, s * 0.05, c);
+    bump(g, x + s * 0.12, y - s * 0.7, s * 0.045, c);
+    glint(g, x - s * 0.28, y - s * 0.6, s * 0.24, s * 0.09, -0.5, 0.85);
+    glint(g, x + s * 0.48, y - s * 0.28, s * 0.05, s * 0.14, 0.4, 0.5);
+  }
+
+  /* ---------- World 3: Planets ---------- */
+  function paintPlanet(g, x, y, s, c, variant) {
+    const R = s * (variant === 2 ? 0.7 : 0.78), ringed = variant === 2;
+    const ring = (from, to) => {
+      g.save(); g.translate(x, y); g.rotate(-0.35);
+      g.lineCap = 'butt';
+      g.strokeStyle = hexA(c[2], 0.85); g.lineWidth = s * 0.09;
+      g.beginPath(); g.ellipse(0, 0, R * 1.45, R * 0.36, 0, from, to); g.stroke();
+      g.strokeStyle = hexA(c[1], 0.6); g.lineWidth = s * 0.025;
+      g.beginPath(); g.ellipse(0, 0, R * 1.28, R * 0.3, 0, from, to); g.stroke();
+      g.restore();
+    };
+    if (ringed) ring(Math.PI, TAU);
+    const ball = new Path2D(); ball.arc(x, y, R, 0, TAU);
+    const gr = g.createRadialGradient(x - R * 0.4, y - R * 0.45, R * 0.05, x, y, R);
+    gr.addColorStop(0, c[2]); gr.addColorStop(0.55, c[0]); gr.addColorStop(1, c[1]);
+    g.fillStyle = gr; g.fill(ball);
+    g.save(); g.clip(ball);
+    g.strokeStyle = hexA(c[2], 0.3); g.lineCap = 'round';
+    [[-0.5, 0.1], [-0.12, 0.07], [0.32, 0.12]].forEach(([dy, w]) => {
+      g.lineWidth = R * w; g.beginPath(); g.moveTo(x - R * 1.1, y + R * dy);
+      g.bezierCurveTo(x - R * 0.4, y + R * (dy - 0.14), x + R * 0.4, y + R * (dy + 0.14), x + R * 1.1, y + R * dy); g.stroke();
+    });
+    [[0.42, -0.3, 0.13], [-0.45, 0.42, 0.1], [0.3, 0.6, 0.08]].forEach(([dx, dy, cr]) => {
+      g.fillStyle = hexA(c[1], 0.35); g.beginPath(); g.arc(x + R * dx, y + R * dy, R * cr, 0, TAU); g.fill();
+      g.fillStyle = hexA(c[2], 0.35); g.beginPath(); g.arc(x + R * dx - R * cr * 0.25, y + R * dy - R * cr * 0.25, R * cr * 0.6, 0, TAU); g.fill();
+    });
+    const night = g.createLinearGradient(x - R * 0.5, y - R * 0.6, x + R, y + R);
+    night.addColorStop(0.45, 'rgba(0,0,0,0)'); night.addColorStop(1, 'rgba(0,0,25,.45)');
+    g.fillStyle = night; g.fillRect(x - R, y - R, 2 * R, 2 * R);
+    g.restore();
+    g.strokeStyle = hexA(c[2], 0.6); g.lineWidth = Math.max(1, s * 0.03); g.stroke(ball);
+    glint(g, x - R * 0.38, y - R * 0.45, R * 0.3, R * 0.16, -0.6, 0.55);
+    if (ringed) ring(0, Math.PI);
+  }
+
+  /* ---------- World 4: Dinosaurs ---------- */
+  function paintDino(g, x, y, s, c) {
+    const top = px0 => 0.15 - 0.4 * Math.sqrt(Math.max(0, 1 - ((px0 + 0.05) / 0.58) ** 2));
+    g.lineJoin = 'round';
+    g.fillStyle = c[2]; g.strokeStyle = c[1]; g.lineWidth = Math.max(1, s * 0.04);
+    [-0.45, -0.24, -0.03, 0.17].forEach(p => {
+      const t = top(p);
+      g.beginPath(); g.moveTo(x + (p - 0.1) * s, y + (t + 0.1) * s); g.lineTo(x + p * s, y + (t - 0.2) * s);
+      g.lineTo(x + (p + 0.1) * s, y + (t + 0.1) * s); g.closePath(); g.fill(); g.stroke();
+    });
+    const parts = [];
+    const tail = new Path2D();
+    tail.moveTo(x - 0.5 * s, y - 0.02 * s);
+    tail.quadraticCurveTo(x - 0.82 * s, y + 0.08 * s, x - 0.94 * s, y + 0.42 * s);
+    tail.quadraticCurveTo(x - 0.7 * s, y + 0.4 * s, x - 0.45 * s, y + 0.38 * s);
+    tail.closePath(); parts.push(tail);
+    [-0.38, -0.15, 0.12, 0.33].forEach(lx => parts.push(ellipsePath(x, y, s, [[lx, 0.5, 0.12, 0.2, 0]])));
+    parts.push(ellipsePath(x, y, s, [[-0.05, 0.15, 0.58, 0.4, 0]]));
+    parts.push(ellipsePath(x, y, s, [[0.42, -0.1, 0.17, 0.27, 0.5]]));
+    parts.push(ellipsePath(x, y, s, [[0.6, -0.36, 0.28, 0.23, 0]]));
+    g.lineWidth = s * 0.09; g.strokeStyle = c[1]; parts.forEach(p => g.stroke(p));
+    const gr = g.createRadialGradient(x - s * 0.2, y - s * 0.25, s * 0.05, x, y + s * 0.1, s * 0.95);
+    gr.addColorStop(0, c[2]); gr.addColorStop(0.5, c[0]); gr.addColorStop(1, c[1]);
+    g.fillStyle = gr; parts.forEach(p => g.fill(p));
+    g.fillStyle = 'rgba(255,255,255,.22)';
+    g.beginPath(); g.ellipse(x, y + s * 0.32, s * 0.4, s * 0.17, 0, 0, TAU); g.fill();
+    g.fillStyle = hexA(c[1], 0.3);
+    [[-0.38, 0.0, 0.06], [-0.2, -0.12, 0.05], [0.12, -0.08, 0.045], [-0.5, 0.18, 0.04]].forEach(([dx, dy, r]) => {
+      g.beginPath(); g.arc(x + dx * s, y + dy * s, r * s, 0, TAU); g.fill();
+    });
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x + 0.64 * s, y - 0.42 * s, 0.08 * s, 0, TAU); g.fill();
+    g.fillStyle = '#1d2433'; g.beginPath(); g.arc(x + 0.67 * s, y - 0.42 * s, 0.045 * s, 0, TAU); g.fill();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x + 0.68 * s, y - 0.44 * s, 0.015 * s, 0, TAU); g.fill();
+    g.strokeStyle = c[1]; g.lineWidth = Math.max(1, s * 0.035); g.lineCap = 'round';
+    g.beginPath(); g.arc(x + 0.68 * s, y - 0.32 * s, 0.1 * s, 0.25, 1.3); g.stroke();
+    g.fillStyle = hexA('#ff5fae', 0.35); g.beginPath(); g.arc(x + 0.55 * s, y - 0.28 * s, 0.05 * s, 0, TAU); g.fill();
+    glint(g, x - s * 0.25, y - s * 0.1, s * 0.22, s * 0.08, -0.3, 0.55);
+    glint(g, x + s * 0.55, y - s * 0.5, s * 0.1, s * 0.05, -0.5, 0.6);
+  }
+
+  /* ---------- World 5: Jelly Worms ---------- */
+  function paintWorm(g, x, y, s, c) {
+    const R = s * 0.6, w = s * 0.36;
+    const a0 = Math.PI * 0.72, a1 = a0 + Math.PI * 1.72, mid = (a0 + a1) / 2;
+    g.lineCap = 'round';
+    g.strokeStyle = hexA(c[1], 0.85); g.lineWidth = w + s * 0.07;
+    g.beginPath(); g.arc(x, y, R, a0, a1); g.stroke();
+    g.lineWidth = w;
+    g.strokeStyle = c[0]; g.beginPath(); g.arc(x, y, R, a0, mid + 0.05); g.stroke();
+    g.strokeStyle = c[2]; g.beginPath(); g.arc(x, y, R, mid, a1); g.stroke();
+    g.strokeStyle = hexA(c[1], 0.25); g.lineWidth = Math.max(1, s * 0.025);
+    for (let a = a0 + 0.25; a < a1 - 0.1; a += 0.32) {
+      g.beginPath(); g.moveTo(x + Math.cos(a) * (R - w * 0.42), y + Math.sin(a) * (R - w * 0.42));
+      g.lineTo(x + Math.cos(a) * (R + w * 0.42), y + Math.sin(a) * (R + w * 0.42)); g.stroke();
+    }
+    g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = w * 0.2;
+    g.beginPath(); g.arc(x, y, R - w * 0.18, a0 + 0.3, a0 + 1.6); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.85)';
+    for (let i = 0; i < 46; i++) {
+      const f1 = (i * 0.618034) % 1, f2 = (i * 0.414214) % 1;
+      const a = a0 + (a1 - a0) * f1, rr = R + (f2 - 0.5) * w * 0.8, q = s * 0.028;
+      g.save(); g.translate(x + Math.cos(a) * rr, y + Math.sin(a) * rr); g.rotate(i); g.fillRect(-q, -q, 2 * q, 2 * q); g.restore();
+    }
+    const hx = x + Math.cos(a1) * R, hy = y + Math.sin(a1) * R;
+    const nx = Math.cos(a1 + Math.PI / 2), ny = Math.sin(a1 + Math.PI / 2);
+    const ox = Math.cos(a1) * w * 0.22, oy = Math.sin(a1) * w * 0.22;
+    [-1, 1].forEach(k => {
+      const ex = hx + nx * w * 0.15 + ox * k, ey = hy + ny * w * 0.15 + oy * k;
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(ex, ey, s * 0.055, 0, TAU); g.fill();
+      g.fillStyle = '#1d2433'; g.beginPath(); g.arc(ex + nx * s * 0.015, ey + ny * s * 0.015, s * 0.03, 0, TAU); g.fill();
+    });
+  }
+
+  /* ---------- World 6: Lollipops ---------- */
+  function paintLolly(g, x, y, s, c) {
+    const cy = y - s * 0.26, R = s * 0.7, sw = s * 0.12;
+    g.fillStyle = '#fbf8f1'; g.strokeStyle = '#c9bfa8'; g.lineWidth = Math.max(1, s * 0.03);
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x - sw / 2, cy, sw, s * 1.2, sw / 2); else g.rect(x - sw / 2, cy, sw, s * 1.2);
+    g.fill(); g.stroke();
+    const disc = new Path2D(); disc.arc(x, cy, R, 0, TAU);
+    g.fillStyle = c[0]; g.fill(disc);
+    g.save(); g.clip(disc);
+    g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = R * 0.15; g.lineCap = 'round';
+    g.beginPath();
+    const turns = Math.PI * 6;
+    for (let t = 0; t <= turns; t += 0.08) {
+      const rr = R * 1.08 * t / turns;
+      const pX = x + Math.cos(t) * rr, pY = cy + Math.sin(t) * rr;
+      if (t === 0) g.moveTo(pX, pY); else g.lineTo(pX, pY);
+    }
+    g.stroke();
+    const sh = g.createRadialGradient(x - R * 0.35, cy - R * 0.4, R * 0.2, x, cy, R * 1.05);
+    sh.addColorStop(0, 'rgba(255,255,255,.15)'); sh.addColorStop(0.7, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.28)');
+    g.fillStyle = sh; g.fillRect(x - R, cy - R, 2 * R, 2 * R);
+    g.restore();
+    g.strokeStyle = c[1]; g.lineWidth = Math.max(1, s * 0.04); g.stroke(disc);
+    const inner = g.createRadialGradient(x - R * 0.12, cy - R * 0.14, R * 0.02, x, cy, R * 0.4);
+    inner.addColorStop(0, c[2]); inner.addColorStop(1, c[0]);
+    g.fillStyle = inner; g.beginPath(); g.arc(x, cy, R * 0.4, 0, TAU); g.fill();
+    g.strokeStyle = hexA(c[1], 0.5); g.lineWidth = Math.max(1, s * 0.025); g.stroke();
+    glint(g, x - R * 0.42, cy - R * 0.45, R * 0.32, R * 0.13, -0.7, 0.85);
+  }
+
+  /* ---------- Worlds ---------- */
+  const SKINS = {
+    gummy:   { name: 'Gummy Bears', free: true, base: 'bear', bases: 'bears', units: 'gummies', paint: paintGummy, labelY: 0.34, font: 0.46, bg: ['#e3f6ef', '#cdeadf'], deco: 'sprinkles', ground: 'shadow' },
+    jelly:   { name: 'Jellyfish', base: 'jellyfish', bases: 'jellyfish', units: 'jellies', paint: paintJelly, labelY: -0.32, font: 0.42, bg: ['#c4e9f6', '#7cc3dd'], deco: 'bubbles', ground: 'glow' },
+    planets: { name: 'Planets', base: 'planet', bases: 'planets', units: 'moons', paint: paintPlanet, labelY: 0, font: 0.55, bg: ['#1f2658', '#0c0f2c'], deco: 'stars', ground: 'glow' },
+    dinos:   { name: 'Dinosaurs', base: 'dino', bases: 'dinos', units: 'baby dinos', paint: paintDino, labelY: 0.17, font: 0.38, bg: ['#eef5d3', '#d4e5a8'], deco: 'leaves', ground: 'shadow' },
+    worms:   { name: 'Jelly Worms', base: 'worm', bases: 'worms', units: 'mini worms', paint: paintWorm, labelY: 0, font: 0.48, bg: ['#f5ebfc', '#e3d0f2'], deco: 'sugar', ground: 'shadow' },
+    lollies: { name: 'Lollipops', base: 'lollipop', bases: 'lollipops', units: 'sweets', paint: paintLolly, labelY: -0.26, font: 0.46, bg: ['#ebf1ff', '#d4e0ff'], deco: 'confetti', ground: 'shadow' },
+  };
+  const SKIN_IDS = Object.keys(SKINS);
+
+  /* ---------- Saved settings (this device only) ---------- */
+  // Inside the iPhone app, saving goes through the app (window.__BB_INITIAL); in a browser it uses localStorage.
+  const native = !!(window.ReactNativeWebView && window.__BB_INITIAL && typeof window.__BB_INITIAL === 'object');
+  const APP_V1 = window.__BB_RELEASE === 'app-1.0';
+  const store = {
+    get(k, d) {
+      if (native) return Object.prototype.hasOwnProperty.call(window.__BB_INITIAL, k) ? window.__BB_INITIAL[k] : d;
+      try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; }
+    },
+    set(k, v) {
+      if (native) {
+        window.__BB_INITIAL[k] = v;
+        try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'store', key: k, value: v })); } catch (e) {}
+        return;
+      }
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+    },
+  };
+  let settings = Object.assign({ name: '', skin: 'gummy', you: 'blue', phone: 'red', level: 'easy' }, store.get('bb-settings', {}));
+  let unlocked = APP_V1 ? false : !!store.get('bb-unlocked', false);
+  const canUseSkin = id => unlocked || SKINS[id].free;
+  const canUseYou = id => unlocked || FREE_YOU.includes(id);
+  const canUsePhone = id => unlocked || FREE_PHONE.includes(id);
+  function enforce() {
+    if (!SKINS[settings.skin] || !canUseSkin(settings.skin)) settings.skin = 'gummy';
+    if (!PALETTE[settings.you] || !canUseYou(settings.you)) settings.you = 'blue';
+    if (!PALETTE[settings.phone] || !canUsePhone(settings.phone)) settings.phone = 'red';
+    if (settings.you === settings.phone) settings.phone = settings.you === 'red' ? 'blue' : 'red';
+    if (!['easy', 'normal', 'hard'].includes(settings.level)) settings.level = 'easy';
+    store.set('bb-settings', settings);
+  }
+
+  let COL = {}, NEUTRALS = [];
+  function applyColours() {
+    COL = { you: PALETTE[settings.you].c, phone: PALETTE[settings.phone].c };
+    NEUTRALS = TEAM_IDS.filter(id => id !== settings.you && id !== settings.phone).map(id => PALETTE[id].c).concat([CLEAR]);
+    const r = document.documentElement.style;
+    r.setProperty('--you', COL.you[0]); r.setProperty('--you-dark', COL.you[1]);
+    r.setProperty('--phone', COL.phone[0]); r.setProperty('--phone-dark', COL.phone[1]);
+  }
+  const colorOf = n => n.owner === 'none' ? NEUTRALS[n.flavor % NEUTRALS.length] : COL[n.owner];
+
+  /* ---------- Game rules ---------- */
+  const SIZES = [
+    { r: 0.050, grow: 0.7, cap: 25 },
+    { r: 0.064, grow: 1.1, cap: 45 },
+    { r: 0.080, grow: 1.6, cap: 70 },
+  ];
+  const LEVELS = {
+    easy:   { every: 3.2, minSend: 10, margin: 6, random: 0.35, mult: 1, name: 'Easy' },
+    normal: { every: 2.0, minSend: 7,  margin: 3, random: 0.15, mult: 2, name: 'Normal' },
+    hard:   { every: 1.1, minSend: 5,  margin: 1, random: 0,    mult: 3, name: 'Hard' },
+  };
+  let W = 0, H = 0, D = 1;
+  let nodes = [], fleets = [], selected = null, pointer = null, dragging = false;
+  let running = false, aiTimer = 0, time = 0, moves = 0, captures = 0;
+  let pops = [];
+
+  const spriteCache = new Map();
+  const bgCanvas = document.createElement('canvas');
+
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, r.width); H = Math.max(1, r.height); D = Math.min(W, H);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    spriteCache.clear();
+    paintBg();
+  }
+  window.addEventListener('resize', resize);
+
+  function paintBg() {
+    const skin = SKINS[settings.skin];
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    bgCanvas.width = Math.round(W * dpr); bgCanvas.height = Math.round(H * dpr);
+    const g = bgCanvas.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, skin.bg[0]); gr.addColorStop(1, skin.bg[1]);
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const candy = ['#3fb93a', '#ffc61a', '#ff8a1f', '#ff5fae', '#9b5de5', '#2f6fe4'];
+    if (skin.deco === 'stars') {
+      [[0.25, 0.3, '#9b5de5'], [0.8, 0.7, '#2f6fe4']].forEach(([fx, fy, col]) => {
+        const neb = g.createRadialGradient(W * fx, H * fy, 0, W * fx, H * fy, D * 0.6);
+        neb.addColorStop(0, hexA(col, 0.25)); neb.addColorStop(1, hexA(col, 0));
+        g.fillStyle = neb; g.fillRect(0, 0, W, H);
+      });
+    }
+    const count = Math.round(W * H / 2600);
+    g.lineCap = 'round';
+    for (let i = 0; i < count; i++) {
+      const x = rnd() * W, y = rnd() * H, a = rnd() * Math.PI, k = rnd();
+      switch (skin.deco) {
+        case 'sprinkles':
+          g.globalAlpha = 0.35; g.strokeStyle = candy[i % 6]; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(x - Math.cos(a) * 4, y - Math.sin(a) * 4); g.lineTo(x + Math.cos(a) * 4, y + Math.sin(a) * 4); g.stroke(); break;
+        case 'bubbles':
+          if (i % 2) break;
+          g.globalAlpha = 0.55; g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
+          g.beginPath(); g.arc(x, y, 1.5 + k * 5, 0, TAU); g.stroke(); break;
+        case 'stars':
+          g.globalAlpha = 0.3 + k * 0.7; g.fillStyle = '#ffffff';
+          g.beginPath(); g.arc(x, y, k > 0.93 ? 1.8 : 0.5 + k * 0.8, 0, TAU); g.fill(); break;
+        case 'leaves':
+          if (i % 3) break;
+          g.globalAlpha = 0.35; g.fillStyle = k > 0.5 ? '#6aa84f' : '#93c47d';
+          g.save(); g.translate(x, y); g.rotate(a * 2); g.beginPath(); g.ellipse(0, 0, 7, 3, 0, 0, TAU); g.fill(); g.restore(); break;
+        case 'sugar':
+          g.globalAlpha = 0.75; g.fillStyle = '#ffffff';
+          g.save(); g.translate(x, y); g.rotate(a); g.fillRect(-1.5, -1.5, 3, 3); g.restore(); break;
+        case 'confetti':
+          if (i % 2) break;
+          g.globalAlpha = 0.35; g.fillStyle = candy[i % 6];
+          g.beginPath(); g.arc(x, y, 2.5, 0, TAU); g.fill(); break;
+      }
+    }
+    g.globalAlpha = 1;
+  }
+
+  function sprite(c, s, variant) {
+    const S = Math.max(4, Math.round(s));
+    const key = settings.skin + '|' + c[0] + '|' + S + '|' + variant;
+    let sp = spriteCache.get(key);
+    if (sp) return sp;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = S * 2.3;
+    const oc = document.createElement('canvas');
+    oc.width = oc.height = Math.ceil(size * dpr);
+    const g = oc.getContext('2d'); g.scale(dpr, dpr);
+    SKINS[settings.skin].paint(g, size / 2, size / 2, S, c, variant);
+    sp = { canvas: oc, size };
+    spriteCache.set(key, sp);
+    return sp;
+  }
+  function drawPiece(x, y, s, c, scale = 1, variant = 0) {
+    const sp = sprite(c, s, variant);
+    const w = sp.size * scale;
+    ctx.drawImage(sp.canvas, x - w / 2, y - w / 2, w, w);
+  }
+
+  const px = n => ({ x: n.x * W, y: n.y * H });
+  const rad = n => SIZES[n.size].r * D * 1.35;
+  const dist = (a, b) => { const p = px(a), q = px(b); return Math.hypot(p.x - q.x, p.y - q.y); };
+
+  function newMap() {
+    nodes = []; fleets = []; pops = []; selected = null;
+    let tries = 0;
+    while (nodes.length < 13 && tries < 4000) {
+      tries++;
+      const size = Math.random() < 0.2 ? 2 : Math.random() < 0.55 ? 1 : 0;
+      const n = { x: 0.1 + Math.random() * 0.8, y: 0.09 + Math.random() * 0.82, size };
+      const r = rad(n);
+      if (nodes.every(m => dist(m, n) > r + rad(m) + D * 0.06)) nodes.push(n);
+    }
+    nodes.sort((a, b) => a.y - b.y);
+    const shift = Math.floor(Math.random() * 6);
+    nodes.forEach((n, i) => { n.owner = 'none'; n.flavor = i + shift; n.n = 4 + Math.floor(Math.random() * (6 + n.size * 6)); n.pulse = 0; });
+    const top = nodes[0], bottom = nodes[nodes.length - 1];
+    top.owner = 'phone'; top.size = 1; top.n = 15;
+    bottom.owner = 'you'; bottom.size = 1; bottom.n = 15;
+  }
+
+  function send(from, to, owner) {
+    const amount = Math.floor(from.n / 2);
+    if (amount < 1 || from === to) return false;
+    from.n -= amount;
+    fleets.push({ from, to, owner, n: amount, t: 0, dur: Math.max(0.6, dist(from, to) / (D * 0.28)) });
+    return true;
+  }
+
+  function arrive(f) {
+    const t = f.to;
+    if (t.owner === f.owner) { t.n += f.n; }
+    else {
+      t.n -= f.n;
+      if (t.n < 0) {
+        t.n = -t.n; t.owner = f.owner; t.pulse = 1;
+        if (f.owner === 'you') captures++;
+        const p = px(t); pops.push({ x: p.x, y: p.y, r: rad(t), life: 1, owner: f.owner });
+      }
+    }
+    if (selected && selected.owner !== 'you') selected = null;
+  }
+
+  const incoming = (target, owner) => fleets.filter(f => f.to === target && f.owner === owner).reduce((s, f) => s + f.n, 0);
+
+  function aiMove() {
+    const L = LEVELS[settings.level];
+    const mine = nodes.filter(n => n.owner === 'phone').sort((a, b) => b.n - a.n);
+    for (const src of mine) {
+      if (src.n < L.minSend) continue;
+      const force = Math.floor(src.n / 2);
+      let best = null, bestScore = Infinity;
+      for (const t of nodes) {
+        if (t === src || t.owner === 'phone') continue;
+        const travel = dist(src, t) / (D * 0.28);
+        const grow = t.owner === 'you' ? SIZES[t.size].grow * travel : 0;
+        const defend = t.n + grow + incoming(t, 'you') - incoming(t, 'phone');
+        if (force <= defend + L.margin) continue;
+        let score = defend + dist(src, t) / D * 18 - t.size * 3 - (t.owner === 'you' ? 4 : 0);
+        score += Math.random() * 30 * L.random;
+        if (score < bestScore) { bestScore = score; best = t; }
+      }
+      if (best) { send(src, best, 'phone'); return; }
+    }
+    if (settings.level === 'hard' && mine.length > 1 && mine[0].n > 30) {
+      const youNodes = nodes.filter(n => n.owner === 'you');
+      if (!youNodes.length) return;
+      const near = a => Math.min(...youNodes.map(y => dist(a, y)));
+      const front = mine.slice(1).sort((a, b) => near(a) - near(b))[0];
+      if (front) send(mine[0], front, 'phone');
+    }
+  }
+
+  const armyOf = o => Math.floor(nodes.filter(n => n.owner === o).reduce((s, n) => s + n.n, 0) + fleets.filter(f => f.owner === o).reduce((s, f) => s + f.n, 0));
+
+  function update(dt) {
+    time += dt;
+    for (const n of nodes) {
+      if (n.owner !== 'none') {
+        const s = SIZES[n.size];
+        if (n.n < s.cap) n.n = Math.min(s.cap, n.n + s.grow * dt);
+        else n.n = Math.max(s.cap, n.n - dt * 2);
+      }
+      n.pulse = Math.max(0, n.pulse - dt * 2);
+    }
+    for (const f of fleets) f.t += dt / f.dur;
+    const done = fleets.filter(f => f.t >= 1);
+    fleets = fleets.filter(f => f.t < 1);
+    done.forEach(arrive);
+    pops.forEach(p => p.life -= dt * 1.8);
+    pops = pops.filter(p => p.life > 0);
+    aiTimer += dt;
+    if (aiTimer >= LEVELS[settings.level].every) { aiTimer = 0; aiMove(); }
+    const alive = o => nodes.some(n => n.owner === o) || fleets.some(f => f.owner === o);
+    if (!alive('phone')) end(true);
+    else if (!alive('you')) end(false);
+  }
+
+  /* ---------- Drawing ---------- */
+  function drawBase(n) {
+    const skin = SKINS[settings.skin];
+    const { x, y } = px(n);
+    const base = rad(n);
+    const r = base * (1 + n.pulse * 0.15);
+    const c = colorOf(n);
+    const wobble = calm ? 1 : 1 + Math.sin(time * 3 + n.x * 10) * 0.02;
+    if (skin.ground === 'shadow') {
+      ctx.fillStyle = hexA(c[0], 0.28);
+      ctx.beginPath(); ctx.ellipse(x + r * 0.08, y + r * 0.97, r * 0.75, r * 0.2, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(23,50,74,.12)';
+      ctx.beginPath(); ctx.ellipse(x + r * 0.08, y + r * 0.99, r * 0.5, r * 0.11, 0, 0, TAU); ctx.fill();
+    } else {
+      const gl = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 1.25);
+      gl.addColorStop(0, hexA(c[0], 0.35)); gl.addColorStop(1, hexA(c[0], 0));
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y, r * 1.25, 0, TAU); ctx.fill();
+    }
+    drawPiece(x, y, base, c, (1 + n.pulse * 0.15) * wobble, n.size);
+    if (n.owner !== 'none') {
+      const frac = Math.min(1, n.n / SIZES[n.size].cap);
+      ctx.strokeStyle = c[0]; ctx.globalAlpha = 0.55; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(x, y, r + 8, -Math.PI / 2, -Math.PI / 2 + frac * TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    if (n === selected) {
+      ctx.strokeStyle = '#ffb300'; ctx.lineWidth = 5;
+      ctx.setLineDash([8, 6]); ctx.lineDashOffset = -time * 30;
+      ctx.beginPath(); ctx.arc(x, y, r + 14, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    const fs = Math.max(13, r * skin.font);
+    ctx.font = `800 ${fs}px "Baloo 2", "Trebuchet MS", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = c[1]; ctx.lineJoin = 'round';
+    const label = String(Math.floor(n.n));
+    const ty = y + r * skin.labelY + fs * 0.08;
+    ctx.strokeText(label, x, ty);
+    ctx.fillStyle = '#fff'; ctx.fillText(label, x, ty);
+  }
+
+  function drawFleet(f) {
+    const a = px(f.from), b = px(f.to);
+    const x = a.x + (b.x - a.x) * f.t, y = a.y + (b.y - a.y) * f.t;
+    const c = COL[f.owner];
+    const count = Math.min(5, 1 + Math.floor(f.n / 8));
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    for (let i = 0; i < count; i++) {
+      const off = (i - (count - 1) / 2) * 11;
+      const back = (i % 2) * 11;
+      const dx = Math.cos(ang + Math.PI / 2) * off - Math.cos(ang) * back;
+      const dy = Math.sin(ang + Math.PI / 2) * off - Math.sin(ang) * back;
+      const hop = calm ? 0 : Math.abs(Math.sin(time * 12 + i * 1.7)) * 3;
+      drawPiece(x + dx, y + dy - hop, 8, c, 1, 0);
+    }
+    ctx.font = '800 13px "Nunito", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.strokeText(f.n, x, y - 20);
+    ctx.fillStyle = c[1]; ctx.fillText(f.n, x, y - 20);
+  }
+
+  function draw() {
+    ctx.drawImage(bgCanvas, 0, 0, W, H);
+    ctx.lineWidth = 2; ctx.setLineDash([4, 8]); ctx.lineCap = 'round';
+    for (const f of fleets) {
+      const a = px(f.from), b = px(f.to);
+      ctx.strokeStyle = hexA(COL[f.owner][0], 0.5);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    if (selected && pointer) {
+      const a = px(selected);
+      ctx.strokeStyle = 'rgba(255,179,0,.9)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(pointer.x, pointer.y); ctx.stroke();
+    }
+    for (const p of pops) {
+      ctx.strokeStyle = COL[p.owner][0]; ctx.globalAlpha = p.life; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (1 - p.life) * 40, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    nodes.forEach(drawBase);
+    fleets.forEach(drawFleet);
+  }
+
+  const tugYou = $('tugYou'), tugPhone = $('tugPhone'), youCount = $('youCount'), phoneCount = $('phoneCount');
+  let hudT = 0;
+  function hud() {
+    const y = armyOf('you'), p = armyOf('phone'), total = Math.max(1, y + p);
+    tugYou.style.width = (y / total * 100) + '%';
+    tugPhone.style.width = (p / total * 100) + '%';
+    youCount.textContent = (settings.name.trim() || 'You') + ' ' + y;
+    phoneCount.textContent = p + ' Phone';
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (running) { update(dt); hudT += dt; if (hudT > 0.2) { hudT = 0; hud(); } }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------- Input ---------- */
+  function hit(x, y) {
+    let best = null, bd = Infinity;
+    for (const n of nodes) { const p = px(n); const d = Math.hypot(p.x - x, p.y - y); if (d < rad(n) + 14 && d < bd) { bd = d; best = n; } }
+    return best;
+  }
+  const local = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const hint = $('hint');
+  function tapOn(n) {
+    if (!n) { selected = null; return; }
+    if (!selected) { if (n.owner === 'you') selected = n; return; }
+    if (n === selected) { selected = null; return; }
+    if (send(selected, n, 'you')) { moves++; if (moves >= 2) hint.hidden = true; }
+    selected = null;
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (!running) return;
+    const p = local(e); const n = hit(p.x, p.y);
+    if (n && n.owner === 'you' && !selected) { selected = n; dragging = true; pointer = p; cv.setPointerCapture(e.pointerId); return; }
+    dragging = false; tapOn(n); pointer = null;
+  });
+  cv.addEventListener('pointermove', e => { if (dragging && selected) pointer = local(e); });
+  cv.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    const p = local(e); const n = hit(p.x, p.y);
+    if (n && n !== selected) tapOn(n);
+    pointer = null;
+  });
+
+  /* ---------- Setup screen ---------- */
+  const LOCK = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h.5A1.5 1.5 0 0 1 14 8.5v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-5A1.5 1.5 0 0 1 3.5 7H4zm2 0h4V5a2 2 0 1 0-4 0v2z"/></svg>';
+  const overlays = ['startOverlay', 'endOverlay', 'scoresOverlay', 'packOverlay'].map($);
+  function show(id) { overlays.forEach(o => o.hidden = o.id !== id); }
+
+  function paintPreview(canvas, skinId, colour) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), size = 52;
+    canvas.width = canvas.height = size * dpr;
+    const g = canvas.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const skin = SKINS[skinId];
+    const gr = g.createLinearGradient(0, 0, 0, size); gr.addColorStop(0, skin.bg[0]); gr.addColorStop(1, skin.bg[1]);
+    g.fillStyle = gr; g.fillRect(0, 0, size, size);
+    skin.paint(g, size / 2, size / 2 + 1, 19, colour, 2);
+  }
+
+  function renderSetup() {
+    const skin = SKINS[settings.skin];
+    const colourName = PALETTE[settings.you].name;
+    $('howTo').textContent = `Tap your ${colourName} ${skin.base}, then tap another one. Half your ${skin.units} march over. Take every ${skin.base} to win.`;
+    $('worldName').textContent = skin.name;
+    $('playerName').value = settings.name;
+
+    const worlds = $('worlds'); worlds.innerHTML = '';
+    SKIN_IDS.forEach(id => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tile' + (canUseSkin(id) ? '' : ' locked');
+      b.setAttribute('aria-pressed', String(id === settings.skin));
+      b.setAttribute('aria-label', SKINS[id].name + (canUseSkin(id) ? '' : ' (Full Pack)'));
+      const c = document.createElement('canvas'); paintPreview(c, id, COL.you);
+      b.appendChild(c);
+      const name = document.createElement('span'); name.textContent = SKINS[id].name; b.appendChild(name);
+      if (SKINS[id].free) { const f = document.createElement('span'); f.className = 'free'; f.textContent = 'Free'; b.appendChild(f); }
+      else if (!unlocked) { const t = document.createElement('span'); t.className = 'tag'; t.innerHTML = LOCK; b.appendChild(t); }
+      b.addEventListener('click', () => {
+        if (!canUseSkin(id)) { openPack(); return; }
+        settings.skin = id; enforce(); spriteCache.clear(); paintBg(); renderSetup();
+      });
+      worlds.appendChild(b);
+    });
+
+    const swatches = (el, side) => {
+      el.innerHTML = '';
+      const ids = APP_V1 ? (side === 'you' ? FREE_YOU : FREE_PHONE) : TEAM_IDS;
+      ids.forEach(id => {
+        const ok = side === 'you' ? canUseYou(id) : canUsePhone(id);
+        const other = side === 'you' ? settings.phone : settings.you;
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'swatch' + (ok ? '' : ' locked');
+        b.style.background = PALETTE[id].c[0];
+        b.setAttribute('aria-pressed', String(settings[side] === id));
+        b.setAttribute('aria-label', PALETTE[id].name + (ok ? '' : ' (Full Pack)'));
+        if (id === other) { b.disabled = true; b.title = 'Already taken'; }
+        if (!ok) b.innerHTML = LOCK;
+        b.addEventListener('click', () => {
+          if (!ok) { openPack(); return; }
+          settings[side] = id; enforce(); applyColours(); renderSetup(); hud();
+        });
+        el.appendChild(b);
+      });
+    };
+    swatches($('youSwatches'), 'you');
+    swatches($('phoneSwatches'), 'phone');
+    document.querySelectorAll('[data-level]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.level === settings.level)));
+    $('packBtn').textContent = unlocked ? 'Full Pack ✓' : 'Full Pack';
+  }
+
+  $('playerName').addEventListener('input', e => { settings.name = e.target.value.slice(0, 14); store.set('bb-settings', settings); hud(); });
+  document.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => {
+    settings.level = b.dataset.level; enforce(); renderSetup();
+  }));
+
+  /* ---------- Full Pack ---------- */
+  function renderPack() {
+    const wrap = $('packWorlds'); wrap.innerHTML = '';
+    SKIN_IDS.filter(id => !SKINS[id].free).forEach(id => {
+      const c = document.createElement('canvas'); c.setAttribute('aria-label', SKINS[id].name);
+      paintPreview(c, id, PALETTE[['blue', 'pink', 'orange', 'green', 'red'][wrap.children.length]].c);
+      wrap.appendChild(c);
+    });
+    $('unlockBtn').textContent = unlocked ? 'Unlocked. Lock again to test free' : 'Unlock Full Pack';
+    $('protoNote').hidden = false;
+  }
+  function openPack() { renderPack(); show('packOverlay'); }
+  $('packBtn').addEventListener('click', openPack);
+  $('unlockBtn').addEventListener('click', () => {
+    unlocked = !unlocked; store.set('bb-unlocked', unlocked);
+    enforce(); applyColours(); spriteCache.clear(); paintBg(); renderPack(); renderSetup();
+    if (unlocked) show('startOverlay');
+  });
+  $('packClose').addEventListener('click', () => show('startOverlay'));
+
+  /* ---------- Scores ---------- */
+  function weekStart() {
+    const d = new Date(); const day = (d.getDay() + 6) % 7;
+    d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - day); return d.getTime();
+  }
+  let boardTab = 'week', lastId = null, returnTo = 'startOverlay';
+  function renderBoard() {
+    const all = store.get('bb-scores', []);
+    const list = (boardTab === 'week' ? all.filter(e => e.t >= weekStart()) : all).slice().sort((a, b) => b.score - a.score).slice(0, 10);
+    $('tabWeek').setAttribute('aria-selected', String(boardTab === 'week'));
+    $('tabAll').setAttribute('aria-selected', String(boardTab === 'all'));
+    const board = $('board'); board.innerHTML = '';
+    if (!list.length) {
+      board.innerHTML = `<div class="empty">No scores ${boardTab === 'week' ? 'this week' : 'yet'}. Win a game to get on the board.</div>`;
+      return;
+    }
+    list.forEach((e, i) => {
+      const row = document.createElement('div'); row.className = 'board-row' + (e.id === lastId ? ' me' : '');
+      const rank = document.createElement('div'); rank.className = 'rank'; rank.textContent = i + 1;
+      const who = document.createElement('div'); who.className = 'who';
+      const nm = document.createElement('b'); nm.textContent = e.name;
+      const meta = document.createElement('span'); meta.textContent = `${LEVELS[e.level] ? LEVELS[e.level].name : ''} · ${SKINS[e.skin] ? SKINS[e.skin].name : ''}${e.won ? '' : ' · lost'}`;
+      who.append(nm, meta);
+      const pts = document.createElement('div'); pts.className = 'pts'; pts.textContent = e.score;
+      row.append(rank, who, pts); board.appendChild(row);
+    });
+  }
+  function openScores(from) { returnTo = from; renderBoard(); show('scoresOverlay'); }
+  $('tabWeek').addEventListener('click', () => { boardTab = 'week'; renderBoard(); });
+  $('tabAll').addEventListener('click', () => { boardTab = 'all'; renderBoard(); });
+  $('scoresBtn').addEventListener('click', () => openScores('startOverlay'));
+  $('endScoresBtn').addEventListener('click', () => openScores('endOverlay'));
+  $('scoresClose').addEventListener('click', () => show(returnTo));
+
+  /* ---------- Game flow ---------- */
+  function start() {
+    enforce(); applyColours(); resize(); newMap();
+    time = 0; aiTimer = -1.5; moves = 0; captures = 0;
+    const skin = SKINS[settings.skin];
+    hint.textContent = `Tap a ${PALETTE[settings.you].name} ${skin.base}, then tap where to attack`;
+    show(null); hint.hidden = false; running = true; hud();
+  }
+  function end(won) {
+    running = false; selected = null; pointer = null; hint.hidden = true;
+    const skin = SKINS[settings.skin], L = LEVELS[settings.level];
+    const secs = Math.round(time);
+    const rows = [];
+    let score;
+    if (won) {
+      const speed = Math.max(0, 180 - secs), left = Math.floor(armyOf('you') / 2);
+      score = L.mult * (100 + speed + left);
+      rows.push(['Win', 100], [`Speed bonus (${secs}s)`, speed], [`${skin.units[0].toUpperCase() + skin.units.slice(1)} left ÷ 2`, left], [`${L.name} level`, `×${L.mult}`]);
+    } else {
+      score = L.mult * captures * 5;
+      rows.push([`${skin.bases[0].toUpperCase() + skin.bases.slice(1)} you captured × 5`, captures * 5], [`${L.name} level`, `×${L.mult}`]);
+    }
+    const all = store.get('bb-scores', []);
+    const name = settings.name.trim() || 'Player';
+    const prevBest = all.filter(e => e.t >= weekStart() && e.name === name).reduce((m, e) => Math.max(m, e.score), 0);
+    lastId = null;
+    if (score > 0) {
+      const entry = { id: Date.now(), name, score, level: settings.level, skin: settings.skin, won, t: Date.now() };
+      all.push(entry); all.sort((a, b) => b.score - a.score);
+      store.set('bb-scores', all.slice(0, 300));
+      lastId = entry.id;
+    }
+    $('endTitle').textContent = won ? 'You win!' : 'The phone wins';
+    $('endText').textContent = won
+      ? `You took every ${skin.base} in ${secs} seconds.`
+      : `Tip: grab the free ${skin.bases} near you first, then attack.`;
+    $('endScore').textContent = score;
+    $('endChip').hidden = !(score > 0 && score > prevBest);
+    const bd = $('endBreakdown'); bd.innerHTML = '';
+    rows.forEach(([k, v]) => { const d = document.createElement('div'); const a = document.createElement('span'); a.textContent = k; const b = document.createElement('b'); b.textContent = typeof v === 'number' ? '+' + v : v; d.append(a, b); bd.appendChild(d); });
+    show('endOverlay');
+  }
+  $('playBtn').addEventListener('click', start);
+  $('againBtn').addEventListener('click', start);
+  const toMenu = () => { running = false; hint.hidden = true; renderSetup(); show('startOverlay'); };
+  $('endMenuBtn').addEventListener('click', toMenu);
+  $('menuBtn').addEventListener('click', toMenu);
+
+  // Hook for automated screenshots/tests only; does nothing unless a test page defines window.__BB_TEST
+  if (typeof window.__BB_TEST === 'function') window.__BB_TEST({ nodes: () => nodes, send, start, end: won => end(won), setTime: t => { time = t; } });
+  if (APP_V1) {
+    // Version 1.0 in the App Store: free content only, nothing locked or "coming soon"
+    $('worldsSection').hidden = true;
+    $('phoneSection').hidden = true;
+    $('packBtn').hidden = true;
+    $('scoresNote').textContent = 'Scores are saved on this phone, so the whole family can compete.';
+  }
+  enforce(); applyColours(); resize(); newMap(); renderSetup(); hud();
+  requestAnimationFrame(loop);
+})();
+</script>
