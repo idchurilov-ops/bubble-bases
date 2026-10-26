@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bubble Bases",
     "slug": "bubble-bases",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,6 +21,20 @@
             ]
           }
         ]
+      },
+      "infoPlist": {
+        "CFBundleLocalizations": [
+          "en",
+          "de",
+          "es",
+          "fr",
+          "it",
+          "pt",
+          "ru",
+          "tr",
+          "zh-Hans"
+        ],
+        "CFBundleAllowMixedLocalizations": true
       }
     },
     "plugins": [
