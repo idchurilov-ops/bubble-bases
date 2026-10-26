@@ -3,6 +3,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAudioModeAsync } from 'expo-audio';
 import Purchases, { INTRO_ELIGIBILITY_STATUS, type CustomerInfo, type PurchasesPackage } from 'react-native-purchases';
 import gameHtml from './game/gameHtml';
 
@@ -51,6 +52,12 @@ export default function App() {
     AsyncStorage.setItem(PRO_KEY, pro.current ? '1' : '0').catch(() => {});
     sendPro();
   }, [sendPro]);
+
+  // Let the game's music and sounds play even when the ringer switch is on silent
+  // (the iPhone treats Bubble Bases like a music app instead of muting it).
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {});
+  }, []);
 
   // Load settings, scores and the last known subscription state saved on this phone.
   useEffect(() => {
